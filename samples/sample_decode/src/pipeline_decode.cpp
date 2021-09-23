@@ -666,6 +666,15 @@ bool CDecodingPipeline::IsVppRequired(sInputParams *pParams)
     {
         bVppIsUsed = true;
     }
+
+    if ((MODE_DECODER_POSTPROC_AUTO == pParams->nDecoderPostProcessing) ||
+        (MODE_DECODER_POSTPROC_FORCE == pParams->nDecoderPostProcessing) )
+    {
+        /* Decoder will make decision about internal post-processing usage slightly later */
+        if((pParams->videoType == MFX_CODEC_AVC) || (pParams->videoType == MFX_CODEC_HEVC))
+            bVppIsUsed = false;
+    }
+
     return bVppIsUsed;
 }
 
@@ -913,6 +922,8 @@ mfxStatus CDecodingPipeline::InitMfxParams(sInputParams *pParams)
 
         if ( (m_mfxVideoParams.mfx.FrameInfo.CropW != pParams->Width && pParams->Width) ||
             (m_mfxVideoParams.mfx.FrameInfo.CropH != pParams->Height && pParams->Height)||
+            (pParams->nDecoderPostProcessing && pParams->videoType == MFX_CODEC_AVC) ||
+            (pParams->nDecoderPostProcessing && pParams->videoType == MFX_CODEC_HEVC) ||
             (pParams->nDecoderPostProcessing && pParams->videoType == MFX_CODEC_JPEG &&
              pParams->fourcc == MFX_FOURCC_RGB4 &&
              // No need to use decoder's post processing for decoding of JPEG with RGB 4:4:4
@@ -928,7 +939,8 @@ mfxStatus CDecodingPipeline::InitMfxParams(sInputParams *pParams)
             if ( ((MODE_DECODER_POSTPROC_AUTO == pParams->nDecoderPostProcessing) ||
                   (MODE_DECODER_POSTPROC_FORCE == pParams->nDecoderPostProcessing)) &&
                  (MFX_CODEC_AVC == m_mfxVideoParams.mfx.CodecId ||
-                  MFX_CODEC_JPEG == m_mfxVideoParams.mfx.CodecId) && /* Only for AVC and JPEG */
+                  MFX_CODEC_HEVC == m_mfxVideoParams.mfx.CodecId ||
+                  MFX_CODEC_JPEG == m_mfxVideoParams.mfx.CodecId) && /* Only for AVC, HEVC and JPEG */
                  (MFX_PICSTRUCT_PROGRESSIVE == m_mfxVideoParams.mfx.FrameInfo.PicStruct)) /* ...And only for progressive!*/
             {   /* it is possible to use decoder's post-processing */
 
@@ -951,6 +963,12 @@ mfxStatus CDecodingPipeline::InitMfxParams(sInputParams *pParams)
 
                 decPostProcessing->Out.FourCC = m_mfxVideoParams.mfx.FrameInfo.FourCC;
                 decPostProcessing->Out.ChromaFormat = m_mfxVideoParams.mfx.FrameInfo.ChromaFormat;
+                if ((pParams->fourcc == MFX_FOURCC_RGB4) &&
+                    (pParams->videoType == MFX_CODEC_AVC || pParams->videoType == MFX_CODEC_HEVC))
+                {
+                    decPostProcessing->Out.FourCC = MFX_FOURCC_RGB4;
+                    decPostProcessing->Out.ChromaFormat = MFX_CHROMAFORMAT_YUV444;
+                }
                 decPostProcessing->Out.Width = MSDK_ALIGN16(pParams->Width);
                 decPostProcessing->Out.Height = MSDK_ALIGN16(pParams->Height);
                 decPostProcessing->Out.CropX = 0;
